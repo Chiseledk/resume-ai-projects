@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>声纹注册 - 语音门禁系统</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', 'Microsoft YaHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #fff;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 24px;
+            padding: 40px 50px;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+            max-width: 520px;
+            width: 90%;
+        }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: rgba(255,255,255,0.5);
+            text-decoration: none;
+            font-size: 14px;
+            transition: color 0.3s;
+        }
+        .back-link:hover { color: #00d4ff; }
+        h1 { font-size: 26px; margin-bottom: 6px; color: #fff; }
+        .subtitle { font-size: 13px; color: rgba(255,255,255,0.4); margin-bottom: 30px; }
+
+        .password-section {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .password-section.hidden { display: none; }
+        .input-group { display: flex; gap: 8px; }
+        input[type="password"] {
+            flex: 1;
+            padding: 12px 16px;
+            font-size: 16px;
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 10px;
+            background: rgba(255,255,255,0.08);
+            color: #fff;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        input[type="password"]::placeholder { color: rgba(255,255,255,0.3); }
+        input[type="password"]:focus { border-color: #00d4ff; }
+        .btn {
+            padding: 12px 24px;
+            font-size: 15px;
+            font-weight: 600;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .btn-verify {
+            background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+            color: #fff;
+            white-space: nowrap;
+        }
+        .btn-verify:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(238,90,36,0.4); }
+        .error-msg { font-size: 13px; color: #ff6b6b; text-align: left; min-height: 18px; }
+
+        .register-section.hidden { display: none; }
+        .user-id-display {
+            font-size: 20px;
+            font-weight: 700;
+            color: #00d4ff;
+            margin: 10px 0;
+        }
+        .instructions {
+            background: rgba(0,0,0,0.2);
+            border-radius: 12px;
+            padding: 16px;
+            margin: 16px 0;
+            text-align: left;
+        }
+        .instructions h3 {
+            font-size: 15px;
+            color: #00d4ff;
+            margin-bottom: 10px;
+        }
+        .instructions li {
+            font-size: 13px;
+            color: rgba(255,255,255,0.7);
+            margin: 6px 0;
+            list-style: none;
+        }
+        .instructions li::before { content: "• "; color: #7c3aed; }
+
+        .mic-area {
+            margin: 20px 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+        }
+        .mic-btn {
+            width: 90px;
+            height: 90px;
+            border-radius: 50%;
+            border: 3px solid rgba(255,255,255,0.3);
+            background: rgba(255,255,255,0.1);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 42px;
+            transition: all 0.3s;
+            position: relative;
+        }
+        .mic-btn:hover {
+            border-color: #00d4ff;
+            background: rgba(0, 212, 255, 0.15);
+            transform: scale(1.05);
+        }
+        .mic-btn.recording {
+            border-color: #ff6b6b;
+            background: rgba(255, 107, 107, 0.2);
+            animation: pulse 1.2s infinite;
+        }
+        .mic-btn.success {
+            border-color: #00b894;
+            background: rgba(0, 184, 148, 0.2);
+        }
+        .mic-btn.error {
+            border-color: #ff6b6b;
+            background: rgba(255, 107, 107, 0.2);
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.08); }
+        }
+        .mic-hint { font-size: 13px; color: rgba(255,255,255,0.5); }
+        .record-time {
+            font-size: 22px;
+            font-weight: 700;
+            color: #ff6b6b;
+            font-variant-numeric: tabular-nums;
+            min-height: 28px;
+        }
+
+        .result-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            display: none;
+        }
+        .result-overlay.show { display: flex; }
+        .result-overlay.success { background: rgba(0, 184, 148, 0.15); }
+        .result-overlay.error { background: rgba(255, 107, 107, 0.15); }
+        .result-box {
+            background: rgba(20, 20, 40, 0.95);
+            border-radius: 20px;
+            padding: 40px 50px;
+            text-align: center;
+            border: 2px solid rgba(255,255,255,0.1);
+        }
+        .result-icon { font-size: 60px; margin-bottom: 16px; }
+        .result-title { font-size: 24px; font-weight: 700; margin-bottom: 10px; }
+        .result-msg { font-size: 14px; color: rgba(255,255,255,0.6); margin-bottom: 24px; }
+        .result-overlay.success .result-title { color: #00b894; }
+        .result-overlay.error .result-title { color: #ff6b6b; }
+        .btn-close {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            padding: 10px 28px;
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        .btn-close:hover { background: rgba(255,255,255,0.2); }
+        .btn-retry {
+            background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+            color: #fff;
+            padding: 10px 28px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-left: 10px;
+            transition: all 0.3s;
+        }
+        .btn-retry:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(238,90,36,0.4); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-link">← 返回首页</a>
+        <h1>🔒 声纹注册</h1>
+        <p class="subtitle">Voiceprint Registration</p>
+
+        <div class="password-section" id="passwordSection">
+            <div class="input-group">
+                <input type="password" id="adminPassword" placeholder="请输入管理员密码" onkeydown="if(event.key==='Enter')verifyAdmin()">
+                <button class="btn btn-verify" onclick="verifyAdmin()">验证</button>
+            </div>
+            <div class="error-msg" id="passwordError"></div>
+        </div>
+
+        <div class="register-section hidden" id="registerSection">
+            <p style="font-size:14px;color:rgba(255,255,255,0.5);margin-bottom:4px;">即将注册的用户ID</p>
+            <div class="user-id-display" id="userIdDisplay">1</div>
+
+            <div class="instructions">
+                <h3>📌 录音说明</h3>
+                <ul>
+                    <li>点击麦克风按钮开始录音</li>
+                    <li>请清晰说出"开门"二字</li>
+                    <li>保持环境安静，靠近麦克风</li>
+                    <li>录音时长约 3 秒</li>
+                </ul>
+            </div>
+
+            <div class="mic-area">
+                <button class="mic-btn" id="micBtn" onclick="toggleRecording()">🎙️</button>
+                <div class="record-time" id="recordTime"></div>
+                <div class="mic-hint" id="micHint">点击开始录音</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="result-overlay" id="resultOverlay">
+        <div class="result-box">
+            <div class="result-icon" id="resultIcon">✅</div>
+            <div class="result-title" id="resultTitle">注册成功</div>
+            <div class="result-msg" id="resultMsg">用户ID 1 注册成功</div>
+            <div>
+                <button class="btn-close" onclick="goHome()">返回首页</button>
+                <button class="btn-retry" onclick="retryRegister()">继续注册</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let isRecording = false;
+        let mediaStream = null;
+        let audioContext = null;
+        let processor = null;
+        let sourceNode = null;
+        let recordTimer = null;
+        let recordSeconds = 0;
+        const RECORD_DURATION = 3;
+        let float32Samples = [];
+
+        function addLog(text, type) {
+            console.log('[' + type + '] ' + text);
+        }
+
+        function writeString(view, offset, string) {
+            for (let i = 0; i < string.length; i++) {
+                view.setUint8(offset + i, string.charCodeAt(i));
+            }
+        }
+
+        function audioToWav(samples, sampleRate) {
+            const buffer = new ArrayBuffer(44 + samples.length * 2);
+            const view = new DataView(buffer);
+            const bytesPerSample = 2;
+            const channels = 1;
+            writeString(view, 0, 'RIFF');
+            view.setUint32(4, 36 + samples.length * bytesPerSample, true);
+            writeString(view, 8, 'WAVE');
+            writeString(view, 12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true);
+            view.setUint16(22, channels, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * channels * bytesPerSample, true);
+            view.setUint16(32, channels * bytesPerSample, true);
+            view.setUint16(34, 8 * bytesPerSample, true);
+            writeString(view, 36, 'data');
+            view.setUint32(40, samples.length * bytesPerSample, true);
+            let offset = 44;
+            for (let i = 0; i < samples.length; i++, offset += 2) {
+                let s = Math.max(-1, Math.min(1, samples[i]));
+                view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+            }
+            return new Blob([view], { type: 'audio/wav' });
+        }
+
+        async function verifyAdmin() {
+            const pwd = document.getElementById('adminPassword').value;
+            const errEl = document.getElementById('passwordError');
+            errEl.textContent = '';
+            try {
+                const res = await fetch('/api/verify_admin', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: pwd })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    document.getElementById('passwordSection').classList.add('hidden');
+                    document.getElementById('registerSection').classList.remove('hidden');
+                    document.getElementById('userIdDisplay').textContent = data.next_id;
+                } else {
+                    errEl.textContent = data.error || '密码错误';
+                    document.getElementById('adminPassword').value = '';
+                }
+            } catch (e) {
+                errEl.textContent = '验证失败，请重试';
+            }
+        }
+
+        async function toggleRecording() {
+            if (isRecording) return;
+            startRecording();
+        }
+
+        async function startRecording() {
+            try {
+                addLog('正在请求麦克风权限...', 'info');
+                mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                addLog('麦克风权限已获取', 'info');
+                
+                audioContext = new AudioContext({ sampleRate: 16000 });
+                sourceNode = audioContext.createMediaStreamSource(mediaStream);
+                processor = audioContext.createScriptProcessor(4096, 1, 1);
+                
+                float32Samples = [];
+                processor.onaudioprocess = (e) => {
+                    if (isRecording) {
+                        float32Samples.push(...e.inputBuffer.getChannelData(0));
+                    }
+                };
+                
+                sourceNode.connect(processor);
+                processor.connect(audioContext.destination);
+                
+                isRecording = true;
+                recordSeconds = 0;
+                const btn = document.getElementById('micBtn');
+                btn.classList.add('recording');
+                btn.textContent = '🔴';
+                document.getElementById('micHint').textContent = '录音中...请说话';
+                document.getElementById('recordTime').textContent = '0:00';
+
+                recordTimer = setInterval(() => {
+                    recordSeconds++;
+                    const m = Math.floor(recordSeconds / 60);
+                    const s = recordSeconds % 60;
+                    document.getElementById('recordTime').textContent = `${m}:${s.toString().padStart(2, '0')}`;
+                    if (recordSeconds >= RECORD_DURATION) {
+                        stopRecording();
+                    }
+                }, 1000);
+            } catch (e) {
+                alert('无法访问麦克风: ' + e.message);
+                console.error(e);
+            }
+        }
+
+        function stopRecording() {
+            if (isRecording) {
+                mediaStream.getTracks().forEach(track => track.stop());
+                processor.disconnect();
+                sourceNode.disconnect();
+                clearInterval(recordTimer);
+                isRecording = false;
+                const btn = document.getElementById('micBtn');
+                btn.classList.remove('recording');
+                btn.textContent = '🎙️';
+                document.getElementById('micHint').textContent = '处理中...';
+                uploadAudio();
+            }
+        }
+
+        async function uploadAudio() {
+            if (float32Samples.length === 0) {
+                alert('没有录音数据');
+                return;
+            }
+            
+            const wavBlob = audioToWav(float32Samples, 16000);
+            const formData = new FormData();
+            formData.append('audio', wavBlob, 'recording.wav');
+
+            try {
+                const res = await fetch('/api/register_voice', { method: 'POST', body: formData });
+                const data = await res.json();
+                if (data.success) {
+                    showResult(true, `用户ID ${data.user_id} 注册成功\n识别内容: ${data.recognized_text || '无'}`);
+                    document.getElementById('micHint').textContent = '点击开始录音';
+                } else {
+                    showResult(false, data.error || '注册失败，请重试');
+                    document.getElementById('micHint').textContent = '点击开始录音';
+                }
+            } catch (e) {
+                showResult(false, '上传失败，请重试');
+                document.getElementById('micHint').textContent = '点击开始录音';
+            }
+        }
+
+        function showResult(success, message) {
+            const overlay = document.getElementById('resultOverlay');
+            overlay.className = 'result-overlay ' + (success ? 'success' : 'error') + ' show';
+            document.getElementById('resultIcon').textContent = success ? '✅' : '❌';
+            document.getElementById('resultTitle').textContent = success ? '注册成功' : '注册失败';
+            document.getElementById('resultMsg').textContent = message;
+
+            const btn = document.getElementById('micBtn');
+            btn.classList.add(success ? 'success' : 'error');
+            setTimeout(() => btn.classList.remove('success', 'error'), 2000);
+        }
+
+        function goHome() {
+            window.location.href = '/';
+        }
+
+        function retryRegister() {
+            document.getElementById('resultOverlay').classList.remove('show');
+            document.getElementById('recordTime').textContent = '';
+            document.getElementById('micHint').textContent = '点击开始录音';
+            fetch('/api/users/count').then(r=>r.json()).then(d => {
+                document.getElementById('userIdDisplay').textContent = d.count + 1;
+            });
+        }
+    </script>
+</body>
+</html>

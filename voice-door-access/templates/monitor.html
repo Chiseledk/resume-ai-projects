@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>门禁监听 - 语音门禁系统</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', 'Microsoft YaHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #fff;
+            transition: background 0.5s ease;
+        }
+        body.bg-success {
+            background: linear-gradient(135deg, #0a2e1a 0%, #162e1a 50%, #1a4a2e 100%);
+        }
+        body.bg-error {
+            background: linear-gradient(135deg, #2e1a1a 0%, #3e1a1a 50%, #4a1a1a 100%);
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 24px;
+            padding: 40px 50px;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+            max-width: 520px;
+            width: 90%;
+            transition: all 0.3s;
+        }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 16px;
+            color: rgba(255,255,255,0.5);
+            text-decoration: none;
+            font-size: 14px;
+            transition: color 0.3s;
+        }
+        .back-link:hover { color: #00d4ff; }
+        h1 { font-size: 26px; margin-bottom: 6px; }
+        .subtitle { font-size: 13px; color: rgba(255,255,255,0.4); margin-bottom: 30px; }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 20px;
+            border-radius: 50px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 24px;
+        }
+        .status-badge.listening {
+            background: rgba(0, 212, 255, 0.15);
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            color: #00d4ff;
+        }
+        .status-badge.processing {
+            background: rgba(255, 193, 7, 0.15);
+            border: 1px solid rgba(255, 193, 7, 0.3);
+            color: #ffc107;
+        }
+        .status-badge.success {
+            background: rgba(0, 184, 148, 0.2);
+            border: 1px solid rgba(0, 184, 148, 0.4);
+            color: #00b894;
+        }
+        .status-badge.error {
+            background: rgba(255, 107, 107, 0.2);
+            border: 1px solid rgba(255, 107, 107, 0.4);
+            color: #ff6b6b;
+        }
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: blink 1.5s infinite;
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .light-indicator {
+            width: 140px;
+            height: 140px;
+            border-radius: 50%;
+            margin: 20px auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 50px;
+            border: 4px solid rgba(255,255,255,0.15);
+            transition: all 0.4s ease;
+            position: relative;
+        }
+        .light-indicator.idle {
+            background: rgba(255,255,255,0.05);
+            box-shadow: inset 0 0 30px rgba(255,255,255,0.05);
+        }
+        .light-indicator.recording {
+            background: rgba(255, 193, 7, 0.2);
+            box-shadow: 0 0 40px rgba(255, 193, 7, 0.4), inset 0 0 30px rgba(255, 193, 7, 0.2);
+            border-color: rgba(255, 193, 7, 0.5);
+            animation: glow-yellow 1s infinite alternate;
+        }
+        .light-indicator.success {
+            background: radial-gradient(circle, #00b894 0%, #00695c 100%);
+            box-shadow: 0 0 60px rgba(0, 184, 148, 0.7), 0 0 120px rgba(0, 184, 148, 0.4);
+            border-color: #00b894;
+        }
+        .light-indicator.error {
+            background: radial-gradient(circle, #ff6b6b 0%, #c0392b 100%);
+            box-shadow: 0 0 60px rgba(255, 107, 107, 0.7), 0 0 120px rgba(255, 107, 107, 0.4);
+            border-color: #ff6b6b;
+        }
+        @keyframes glow-yellow {
+            from { box-shadow: 0 0 30px rgba(255, 193, 7, 0.3); }
+            to { box-shadow: 0 0 50px rgba(255, 193, 7, 0.5); }
+        }
+
+        .light-ring {
+            position: absolute;
+            width: 160px;
+            height: 160px;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            top: -14px;
+            left: -14px;
+        }
+        .light-indicator.success .light-ring {
+            border-color: rgba(0, 184, 148, 0.3);
+            animation: ring-expand 1s ease-out forwards;
+        }
+        .light-indicator.error .light-ring {
+            border-color: rgba(255, 107, 107, 0.3);
+            animation: ring-expand 1s ease-out forwards;
+        }
+        @keyframes ring-expand {
+            from { transform: scale(1); opacity: 1; }
+            to { transform: scale(1.5); opacity: 0; }
+        }
+
+        .hint-text {
+            font-size: 15px;
+            color: rgba(255,255,255,0.6);
+            margin: 12px 0 6px;
+        }
+        .command-text {
+            font-size: 14px;
+            color: #00d4ff;
+            margin: 8px 0;
+            min-height: 20px;
+            font-weight: 600;
+        }
+        .info-row {
+            display: flex;
+            justify-content: center;
+            gap: 24px;
+            margin: 10px 0;
+            font-size: 13px;
+            color: rgba(255,255,255,0.4);
+        }
+        .info-row span { color: #00d4ff; font-weight: 600; }
+
+        .log-area {
+            background: rgba(0,0,0,0.25);
+            border-radius: 12px;
+            padding: 14px;
+            margin-top: 20px;
+            text-align: left;
+            max-height: 160px;
+            overflow-y: auto;
+            font-size: 12px;
+            color: rgba(255,255,255,0.5);
+        }
+        .log-area::-webkit-scrollbar { width: 4px; }
+        .log-area::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }
+        .log-entry { margin: 4px 0; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .log-time { color: rgba(255,255,255,0.25); margin-right: 8px; }
+        .log-success { color: #00b894; }
+        .log-error { color: #ff6b6b; }
+        .log-info { color: #00d4ff; }
+
+        .btn-manual {
+            margin-top: 16px;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.15);
+            color: rgba(255,255,255,0.6);
+            padding: 10px 28px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        .btn-manual:hover { background: rgba(255,255,255,0.15); color: #fff; }
+
+        .wave-container {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 80px;
+            overflow: hidden;
+            pointer-events: none;
+            display: none;
+        }
+        .wave-container.active { display: block; }
+        .wave {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 80px;
+            opacity: 0.15;
+        }
+        .door-animation {
+            width: 200px;
+            height: 120px;
+            margin: 20px auto;
+            position: relative;
+            perspective: 500px;
+        }
+        .door-frame {
+            width: 100%;
+            height: 100%;
+            border: 4px solid rgba(255,255,255,0.3);
+            border-radius: 8px;
+            position: relative;
+            overflow: hidden;
+            background: linear-gradient(180deg, #2a2a3a 0%, #1a1a2a 100%);
+        }
+        .door-panel {
+            width: 50%;
+            height: 100%;
+            background: linear-gradient(90deg, #3a3a4a 0%, #2a2a3a 100%);
+            position: absolute;
+            right: 0;
+            transform-origin: right center;
+            transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            padding-left: 10px;
+        }
+        .door-panel::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: rgba(255,255,255,0.1);
+        }
+        .door-handle {
+            width: 8px;
+            height: 8px;
+            background: #ffd700;
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(255,215,0,0.5);
+        }
+        .door-panel.open {
+            transform: rotateY(-80deg);
+        }
+        .door-light {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #555;
+            transition: all 0.3s;
+        }
+        .door-light.green {
+            background: #00ff00;
+            box-shadow: 0 0 20px #00ff00, 0 0 40px #00ff00;
+        }
+        .door-light.red {
+            background: #ff4444;
+            box-shadow: 0 0 20px #ff4444;
+        }
+        .success-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.5s;
+            z-index: 1000;
+        }
+        .success-overlay.show {
+            opacity: 1;
+        }
+        .success-text {
+            font-size: 48px;
+            font-weight: bold;
+            color: #00ff00;
+            text-shadow: 0 0 30px #00ff00, 0 0 60px #00ff00;
+            animation: successPulse 0.5s ease-out;
+        }
+        @keyframes successPulse {
+            0% { transform: scale(0.5); opacity: 0; }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .confetti {
+            position: fixed;
+            top: -10px;
+            width: 10px;
+            height: 10px;
+            opacity: 0;
+        }
+        @keyframes confettiFall {
+            0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="success-overlay" id="successOverlay">
+        <div class="success-text">🚪 门已开启</div>
+    </div>
+
+    <div class="container" id="mainContainer">
+        <a href="/" class="back-link">← 返回首页</a>
+        <h1>🔓 门禁监听</h1>
+        <p class="subtitle">Voice Access Verification</p>
+
+        <div id="statusBadge" class="status-badge listening">
+            <span class="dot"></span>
+            <span id="statusText">等待语音输入</span>
+        </div>
+
+        <div class="light-indicator idle" id="lightIndicator">
+            <div class="light-ring"></div>
+            <span id="lightIcon">🔇</span>
+        </div>
+
+        <div class="door-animation" id="doorAnimation">
+            <div class="door-frame">
+                <div class="door-light" id="doorLight"></div>
+                <div class="door-panel" id="doorPanel">
+                    <div class="door-handle"></div>
+                </div>
+            </div>
+        </div>
+
+        <p class="hint-text" id="hintText">点击麦克风按钮开始验证</p>
+        <p class="command-text" id="commandText"></p>
+
+        <div class="info-row" id="infoRow" style="display:none;">
+            <div>用户ID: <span id="userIdSpan">-</span></div>
+            <div>相似度: <span id="similaritySpan">-</span></div>
+            <div>口令: <span id="cmdMatchSpan">-</span></div>
+        </div>
+
+        <div style="margin-top: 20px;">
+            <button class="mic-btn" id="micBtn" onclick="toggleRecording()" style="
+                width: 80px; height: 80px; border-radius: 50%;
+                border: 3px solid rgba(255,255,255,0.25);
+                background: rgba(255,255,255,0.1);
+                cursor: pointer; font-size: 36px;
+                display: flex; align-items: center; justify-content: center;
+                transition: all 0.3s;
+            ">🎙️</button>
+        </div>
+
+        <button class="btn-manual" onclick="toggleRecording()">开始验证</button>
+
+        <div class="log-area" id="logArea">
+            <div class="log-entry log-info"><span class="log-time">[--:--:--]</span>系统就绪，等待语音输入...</div>
+        </div>
+    </div>
+
+    <script>
+        let isRecording = false;
+        let stream = null;
+        let audioContext = null;
+        let processor = null;
+        let sourceNode = null;
+        let float32Samples = [];
+
+        const indicator = document.getElementById('lightIndicator');
+        const lightIcon = document.getElementById('lightIcon');
+        const statusBadge = document.getElementById('statusBadge');
+        const statusText = document.getElementById('statusText');
+        const hintText = document.getElementById('hintText');
+        const commandText = document.getElementById('commandText');
+        const infoRow = document.getElementById('infoRow');
+        const logArea = document.getElementById('logArea');
+        const doorPanel = document.getElementById('doorPanel');
+        const doorLight = document.getElementById('doorLight');
+        const successOverlay = document.getElementById('successOverlay');
+
+        function initAudioContext() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            return audioContext;
+        }
+
+        function writeString(view, offset, string) {
+            for (let i = 0; i < string.length; i++) {
+                view.setUint8(offset + i, string.charCodeAt(i));
+            }
+        }
+
+        function audioToWav(samples, sampleRate) {
+            const buffer = new ArrayBuffer(44 + samples.length * 2);
+            const view = new DataView(buffer);
+            const bytesPerSample = 2;
+            const channels = 1;
+            writeString(view, 0, 'RIFF');
+            view.setUint32(4, 36 + samples.length * bytesPerSample, true);
+            writeString(view, 8, 'WAVE');
+            writeString(view, 12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true);
+            view.setUint16(22, channels, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * channels * bytesPerSample, true);
+            view.setUint16(32, channels * bytesPerSample, true);
+            view.setUint16(34, 8 * bytesPerSample, true);
+            writeString(view, 36, 'data');
+            view.setUint32(40, samples.length * bytesPerSample, true);
+            let offset = 44;
+            for (let i = 0; i < samples.length; i++, offset += 2) {
+                let s = Math.max(-1, Math.min(1, samples[i]));
+                view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+            }
+            return new Blob([view], { type: 'audio/wav' });
+        }
+
+        function playSuccessSound() {
+            initAudioContext();
+            const osc = audioContext.createOscillator();
+            const gain = audioContext.createGain();
+            osc.connect(gain);
+            gain.connect(audioContext.destination);
+            osc.frequency.setValueAtTime(880, audioContext.currentTime);
+            osc.frequency.setValueAtTime(1100, audioContext.currentTime + 0.1);
+            gain.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+            osc.start(audioContext.currentTime);
+            osc.stop(audioContext.currentTime + 0.3);
+        }
+
+        function playErrorSound() {
+            initAudioContext();
+            const osc = audioContext.createOscillator();
+            const gain = audioContext.createGain();
+            osc.connect(gain);
+            gain.connect(audioContext.destination);
+            osc.frequency.setValueAtTime(300, audioContext.currentTime);
+            gain.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+            osc.start(audioContext.currentTime);
+            osc.stop(audioContext.currentTime + 0.3);
+        }
+
+        function openDoor() {
+            doorPanel.classList.add('open');
+            doorLight.classList.add('green');
+            successOverlay.classList.add('show');
+            createConfetti();
+        }
+
+        function closeDoor() {
+            doorPanel.classList.remove('open');
+            doorLight.classList.remove('green');
+            successOverlay.classList.remove('show');
+        }
+
+        function setDoorError() {
+            doorLight.classList.add('red');
+            setTimeout(() => doorLight.classList.remove('red'), 1000);
+        }
+
+        function createConfetti() {
+            const colors = ['#ff6b6b', '#00b894', '#00d4ff', '#ffd700', '#7c3aed'];
+            for (let i = 0; i < 30; i++) {
+                const confetti = document.createElement('div');
+                confetti.className = 'confetti';
+                confetti.style.left = Math.random() * 100 + 'vw';
+                confetti.style.background = colors[Math.floor(Math.random() * colors.length)];
+                confetti.style.animation = `confettiFall ${1.5 + Math.random()}s ease-out forwards`;
+                confetti.style.animationDelay = Math.random() * 0.5 + 's';
+                document.body.appendChild(confetti);
+                setTimeout(() => confetti.remove(), 3000);
+            }
+        }
+
+        function setStatus(state, text) {
+            statusBadge.className = 'status-badge ' + state;
+            statusText.textContent = text;
+        }
+
+        function setLight(state, icon) {
+            indicator.className = 'light-indicator ' + state;
+            lightIcon.textContent = icon;
+        }
+
+        function setBg(state) {
+            document.body.className = '';
+            if (state === 'success') document.body.classList.add('bg-success');
+            if (state === 'error') document.body.classList.add('bg-error');
+        }
+
+        function addLog(text, type = 'info') {
+            const now = new Date();
+            const time = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`;
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.innerHTML = `<span class="log-time">[${time}]</span>${text}`;
+            logArea.appendChild(entry);
+            logArea.scrollTop = logArea.scrollHeight;
+        }
+
+        async function toggleRecording() {
+            if (isRecording) return;
+            await startRecording();
+        }
+
+        async function startRecording() {
+            try {
+                addLog('正在请求麦克风权限...', 'info');
+                stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                addLog('麦克风权限已获取', 'info');
+                
+                audioContext = new AudioContext({ sampleRate: 16000 });
+                sourceNode = audioContext.createMediaStreamSource(stream);
+                processor = audioContext.createScriptProcessor(4096, 1, 1);
+                
+                float32Samples = [];
+                processor.onaudioprocess = (e) => {
+                    if (isRecording) {
+                        float32Samples.push(...e.inputBuffer.getChannelData(0));
+                    }
+                };
+                
+                sourceNode.connect(processor);
+                processor.connect(audioContext.destination);
+                
+                isRecording = true;
+
+                setLight('recording', '🎤');
+                setStatus('processing', '录音中...请说"开门"');
+                hintText.textContent = '请清晰说出"开门"';
+                commandText.textContent = '';
+                infoRow.style.display = 'none';
+                setBg('');
+                addLog('开始录音，等待语音输入...', 'info');
+
+                setTimeout(() => {
+                    if (isRecording) {
+                        stopRecording();
+                        addLog('录音超时', 'info');
+                    }
+                }, 5000);
+            } catch (e) {
+                addLog('无法访问麦克风: ' + e.message, 'error');
+                alert('无法访问麦克风: ' + e.message);
+            }
+        }
+
+        function stopRecording() {
+            if (isRecording) {
+                stream.getTracks().forEach(track => track.stop());
+                processor.disconnect();
+                sourceNode.disconnect();
+                isRecording = false;
+                verifyAudio();
+            }
+        }
+
+        async function verifyAudio() {
+            if (float32Samples.length === 0) {
+                addLog('没有录音数据', 'error');
+                resetUI();
+                return;
+            }
+            
+            const wavBlob = audioToWav(float32Samples, 16000);
+            const formData = new FormData();
+            formData.append('audio', wavBlob, 'verify.wav');
+
+            setLight('recording', '🔄');
+            setStatus('processing', '验证中...');
+            hintText.textContent = '正在处理...';
+            addLog('正在验证...', 'info');
+
+            try {
+                const res = await fetch('/api/verify_voice', { method: 'POST', body: formData });
+                const data = await res.json();
+
+                if (data.access_granted) {
+                    playSuccessSound();
+                    openDoor();
+                    setLight('success', '✅');
+                    setStatus('success', '验证成功');
+                    setBg('success');
+                    hintText.textContent = '门已开启';
+                    commandText.textContent = `识别口令: "${data.command_text || '开门'}"`;
+                    document.getElementById('userIdSpan').textContent = data.voiceprint_user_id || '-';
+                    document.getElementById('similaritySpan').textContent = data.voiceprint_similarity || '-';
+                    document.getElementById('cmdMatchSpan').textContent = '✓ 正确';
+                    infoRow.style.display = 'flex';
+                    addLog(`✅ 验证成功 - 用户ID: ${data.voiceprint_user_id}，声纹相似度: ${data.voiceprint_similarity}`, 'success');
+                    setTimeout(() => {
+                        closeDoor();
+                        resetUI();
+                    }, 3000);
+                } else {
+                    const reason = data.message || '验证失败';
+                    playErrorSound();
+                    setDoorError();
+                    setLight('error', '❌');
+                    setStatus('error', '验证失败');
+                    setBg('error');
+                    hintText.textContent = reason;
+                    if (data.voiceprint_match) {
+                        commandText.textContent = `口令"${data.command_text || '未识别'}"不正确`;
+                        document.getElementById('cmdMatchSpan').textContent = '✗ 错误';
+                    } else {
+                        commandText.textContent = '声纹不匹配';
+                        document.getElementById('cmdMatchSpan').textContent = '✗ 未匹配';
+                    }
+                    document.getElementById('userIdSpan').textContent = data.voiceprint_user_id || '-';
+                    document.getElementById('similaritySpan').textContent = data.voiceprint_similarity || '-';
+                    infoRow.style.display = 'flex';
+                    addLog(`❌ ${reason}，声纹相似度: ${data.voiceprint_similarity || 0}`, 'error');
+                    setTimeout(() => resetUI(), 3000);
+                }
+            } catch (e) {
+                setLight('error', '❌');
+                setStatus('error', '请求失败');
+                hintText.textContent = '网络错误，请重试';
+                addLog('❌ 网络错误: ' + e.message, 'error');
+                setTimeout(() => resetUI(), 3000);
+            }
+        }
+
+        function resetUI() {
+            setLight('idle', '🔇');
+            setStatus('listening', '等待语音输入');
+            hintText.textContent = '点击麦克风按钮开始验证';
+            commandText.textContent = '';
+            infoRow.style.display = 'none';
+            setBg('');
+        }
+    </script>
+</body>
+</html>
