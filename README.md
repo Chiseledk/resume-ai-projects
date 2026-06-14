@@ -1,7 +1,5 @@
 # AI Resume Projects
 
-这个仓库整理了简历中已在本机找到源码的 AI 应用项目，便于 GitHub 展示和面试查看。
-
 ## Projects
 
 | Project | Description | Tech |
