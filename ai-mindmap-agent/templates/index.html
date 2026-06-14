@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 思维导图生成器</title>
+    <style>
+        :root {
+            --bg: #f4f6f8;
+            --panel: #ffffff;
+            --ink: #17202a;
+            --muted: #65717f;
+            --line: #d8dee7;
+            --primary: #1f7a6d;
+            --primary-dark: #155c52;
+            --node: #fffaf3;
+            --danger: #b3261e;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--ink);
+            font-family: "Microsoft YaHei", "PingFang SC", Arial, sans-serif;
+        }
+
+        .app {
+            min-height: 100vh;
+            display: grid;
+            grid-template-columns: minmax(340px, 440px) minmax(0, 1fr);
+        }
+
+        .sidebar {
+            background: var(--panel);
+            border-right: 1px solid var(--line);
+            padding: 22px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            overflow: auto;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 24px;
+            line-height: 1.25;
+        }
+
+        h2 {
+            margin: 4px 0 0;
+            font-size: 14px;
+            color: var(--muted);
+            font-weight: 700;
+        }
+
+        .sub {
+            margin: 6px 0 0;
+            color: var(--muted);
+            line-height: 1.6;
+            font-size: 14px;
+        }
+
+        textarea, input {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            color: var(--ink);
+            font: 15px/1.55 inherit;
+            outline: none;
+            background: #fff;
+        }
+
+        textarea {
+            min-height: 210px;
+            resize: vertical;
+        }
+
+        textarea:focus, input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(31, 122, 109, 0.12);
+        }
+
+        .actions {
+            display: grid;
+            grid-template-columns: 1fr 52px 52px;
+            gap: 10px;
+        }
+
+        .project-actions {
+            display: grid;
+            grid-template-columns: 1fr 72px 72px;
+            gap: 10px;
+        }
+
+        button {
+            min-height: 42px;
+            border: 0;
+            border-radius: 8px;
+            background: var(--primary);
+            color: white;
+            font: 700 14px/1 inherit;
+            cursor: pointer;
+        }
+
+        button:hover { background: var(--primary-dark); }
+        button:disabled { opacity: 0.65; cursor: wait; }
+
+        button.secondary {
+            background: #e8edf1;
+            color: var(--ink);
+        }
+
+        button.secondary:hover { background: #dce4ea; }
+
+        button.danger {
+            background: #f4d7d4;
+            color: var(--danger);
+        }
+
+        button.danger:hover { background: #ebc4c0; }
+
+        .status {
+            min-height: 22px;
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .status.error { color: var(--danger); }
+
+        .list {
+            display: grid;
+            gap: 8px;
+            max-height: 180px;
+            overflow: auto;
+            padding-right: 2px;
+        }
+
+        .list-item {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 8px;
+            align-items: center;
+            padding: 10px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: #fbfcfd;
+            cursor: pointer;
+        }
+
+        .list-item:hover { border-color: #9bbcb6; }
+
+        .list-title {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-weight: 700;
+            font-size: 13px;
+        }
+
+        .list-meta {
+            color: var(--muted);
+            font-size: 12px;
+            white-space: nowrap;
+        }
+
+        .canvas-wrap {
+            min-width: 0;
+            display: grid;
+            grid-template-rows: minmax(360px, 1fr) 240px;
+        }
+
+        .map-stage {
+            position: relative;
+            overflow: hidden;
+            background:
+                linear-gradient(rgba(23, 32, 42, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(23, 32, 42, 0.05) 1px, transparent 1px);
+            background-size: 32px 32px;
+        }
+
+        svg {
+            width: 100%;
+            height: 100%;
+            display: block;
+            touch-action: none;
+        }
+
+        .empty {
+            position: absolute;
+            inset: 0;
+            display: grid;
+            place-items: center;
+            color: var(--muted);
+            text-align: center;
+            padding: 24px;
+        }
+
+        .data-panel {
+            border-top: 1px solid var(--line);
+            background: #101820;
+            color: #d8e2ea;
+            overflow: auto;
+            padding: 16px;
+            font: 13px/1.55 Consolas, "Courier New", monospace;
+            white-space: pre-wrap;
+        }
+
+        .edge {
+            fill: none;
+            stroke: #9aa8b7;
+            stroke-width: 2.2;
+            stroke-linecap: round;
+        }
+
+        .node {
+            cursor: grab;
+        }
+
+        .node.dragging {
+            cursor: grabbing;
+        }
+
+        .node.selected .node-rect {
+            stroke: #c65d3a;
+            stroke-width: 3;
+        }
+
+        .node-rect {
+            fill: var(--node);
+            stroke: #cfd8df;
+            stroke-width: 1.4;
+            filter: drop-shadow(0 4px 9px rgba(23, 32, 42, 0.12));
+        }
+
+        .root .node-rect {
+            fill: var(--primary);
+            stroke: var(--primary-dark);
+        }
+
+        .branch-1 .node-rect {
+            fill: #edf7f5;
+            stroke: #8bc2b8;
+        }
+
+        .branch-2 .node-rect {
+            fill: #fff5ed;
+            stroke: #e2a07e;
+        }
+
+        .node-text {
+            dominant-baseline: middle;
+            text-anchor: middle;
+            font-weight: 700;
+            fill: var(--ink);
+            pointer-events: none;
+            user-select: none;
+        }
+
+        .root .node-text { fill: #ffffff; }
+
+        @media (max-width: 900px) {
+            .app {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto minmax(520px, 1fr);
+            }
+
+            .sidebar {
+                border-right: 0;
+                border-bottom: 1px solid var(--line);
+            }
+
+            textarea { min-height: 170px; }
+            .canvas-wrap { grid-template-rows: 520px 220px; }
+        }
+    </style>
+</head>
+<body>
+<main class="app">
+    <section class="sidebar">
+        <div>
+            <h1>AI 思维导图生成器</h1>
+            <p class="sub">生成后可拖拽节点调整布局，双击节点可改名；项目和历史记录保存在当前浏览器。</p>
+        </div>
+
+        <input id="projectName" placeholder="项目名称，例如：课程复习导图">
+        <textarea id="inputText" placeholder="输入文本，例如：
+思维导图工具需要强调图结构体验。系统应提取段落主题、关键词和关键句。
+
+算法层可以结合关键词提取、段落聚类和径向树布局。布局算法负责减少节点重叠。"></textarea>
+
+        <div class="actions">
+            <button id="generateBtn" type="button">生成图</button>
+            <button class="secondary" id="downloadSvgBtn" type="button" title="下载 SVG">SVG</button>
+            <button class="secondary" id="downloadJsonBtn" type="button" title="下载 JSON">JSON</button>
+        </div>
+
+        <div class="project-actions">
+            <button id="saveProjectBtn" type="button">保存项目</button>
+            <button class="secondary" id="newProjectBtn" type="button">新建</button>
+            <button class="danger" id="deleteProjectBtn" type="button">删除</button>
+        </div>
+
+        <div id="status" class="status"></div>
+
+        <section>
+            <h2>当前节点</h2>
+            <div class="project-actions">
+                <input id="selectedNodeName" placeholder="先点击一个节点" disabled>
+                <button id="applyNodeNameBtn" type="button" disabled>应用</button>
+                <button class="secondary" id="clearSelectionBtn" type="button">取消</button>
+            </div>
+        </section>
+
+        <section>
+            <h2>项目</h2>
+            <div id="projectList" class="list"></div>
+        </section>
+
+        <section>
+            <h2>历史记录</h2>
+            <div id="historyList" class="list"></div>
+        </section>
+    </section>
+
+    <section class="canvas-wrap">
+        <div class="map-stage">
+            <svg id="mindmapSvg" role="img" aria-label="思维导图"></svg>
+            <div id="emptyState" class="empty">生成后，节点和连线会显示在这里。</div>
+        </div>
+        <pre id="jsonPanel" class="data-panel"></pre>
+    </section>
+</main>
+
+<script>
+    const STORAGE_KEY = "mindmap_generator_projects_v1";
+    const HISTORY_KEY = "mindmap_generator_history_v1";
+
+    const inputText = document.getElementById("inputText");
+    const projectName = document.getElementById("projectName");
+    const generateBtn = document.getElementById("generateBtn");
+    const statusEl = document.getElementById("status");
+    const svg = document.getElementById("mindmapSvg");
+    const emptyState = document.getElementById("emptyState");
+    const jsonPanel = document.getElementById("jsonPanel");
+    const downloadSvgBtn = document.getElementById("downloadSvgBtn");
+    const downloadJsonBtn = document.getElementById("downloadJsonBtn");
+    const saveProjectBtn = document.getElementById("saveProjectBtn");
+    const newProjectBtn = document.getElementById("newProjectBtn");
+    const deleteProjectBtn = document.getElementById("deleteProjectBtn");
+    const selectedNodeName = document.getElementById("selectedNodeName");
+    const applyNodeNameBtn = document.getElementById("applyNodeNameBtn");
+    const clearSelectionBtn = document.getElementById("clearSelectionBtn");
+    const projectList = document.getElementById("projectList");
+    const historyList = document.getElementById("historyList");
+
+    let lastMindmap = null;
+    let lastGenerationSource = null;
+    let currentProjectId = null;
+    let selectedNodeId = null;
+    let dragState = null;
+
+    generateBtn.addEventListener("click", generateMindMap);
+    downloadSvgBtn.addEventListener("click", downloadSvg);
+    downloadJsonBtn.addEventListener("click", downloadJson);
+    saveProjectBtn.addEventListener("click", saveCurrentProject);
+    newProjectBtn.addEventListener("click", resetWorkspace);
+    deleteProjectBtn.addEventListener("click", deleteCurrentProject);
+    applyNodeNameBtn.addEventListener("click", applySelectedNodeName);
+    clearSelectionBtn.addEventListener("click", clearNodeSelection);
+    svg.addEventListener("pointermove", dragNode);
+    svg.addEventListener("pointerup", stopDrag);
+    svg.addEventListener("pointerleave", stopDrag);
+
+    renderProjectList();
+    renderHistoryList();
+
+    async function generateMindMap() {
+        const text = inputText.value.trim();
+        if (!text) {
+            setStatus("请输入内容。", true);
+            return;
+        }
+
+        setStatus("正在生成图结构...");
+        generateBtn.disabled = true;
+
+        try {
+            const response = await fetch("/api/generate_mindmap", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({text})
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || "生成失败");
+            }
+
+            lastMindmap = data.mindmap;
+            lastGenerationSource = data.generation_source;
+            renderMindmap(lastMindmap.graph);
+            syncJsonPanel();
+            addHistoryEntry();
+            setStatus(`${sourceLabel(data.generation_source)}，已生成 ${lastMindmap.graph.nodes.length} 个节点、${lastMindmap.graph.edges.length} 条边。${aiStatusText(data)}`);
+        } catch (error) {
+            setStatus(error.message, true);
+        } finally {
+            generateBtn.disabled = false;
+        }
+    }
+
+    function renderMindmap(graph) {
+        svg.innerHTML = "";
+        emptyState.style.display = "none";
+
+        const nodes = graph.nodes || [];
+        const edges = graph.edges || [];
+        if (!nodes.length) {
+            emptyState.style.display = "grid";
+            return;
+        }
+
+        updateViewBox(nodes);
+        const nodeById = new Map(nodes.map(node => [node.id, node]));
+        const edgeGroup = svgEl("g", {"data-role": "edges"});
+        const nodeGroup = svgEl("g", {"data-role": "nodes"});
+        svg.append(edgeGroup, nodeGroup);
+
+        edges.forEach(edge => {
+            const source = nodeById.get(edge.source);
+            const target = nodeById.get(edge.target);
+            if (!source || !target) return;
+            edgeGroup.appendChild(svgEl("path", {
+                class: "edge",
+                "data-source": edge.source,
+                "data-target": edge.target,
+                d: curvedPath(source.x, source.y, target.x, target.y)
+            }));
+        });
+
+        nodes.forEach((node, index) => {
+            nodeGroup.appendChild(createNodeElement(node, index));
+        });
+    }
+
+    function createNodeElement(node, index) {
+        const label = wrapLabel(node.label, node.depth === 0 ? 16 : 12);
+        const width = Math.max(node.depth === 0 ? 190 : 130, Math.min(250, longestLine(label) * 14 + 34));
+        const height = Math.max(48, label.length * 20 + 18);
+        const group = svgEl("g", {
+            class: `node ${node.depth === 0 ? "root" : ""} branch-${index % 3} ${selectedNodeId === node.id ? "selected" : ""}`,
+            transform: `translate(${node.x}, ${node.y})`,
+            "data-id": node.id
+        });
+
+        group.addEventListener("pointerdown", startDrag);
+        group.addEventListener("dblclick", renameNode);
+
+        group.appendChild(svgEl("rect", {
+            class: "node-rect",
+            x: -width / 2,
+            y: -height / 2,
+            width,
+            height,
+            rx: 8
+        }));
+
+        label.forEach((line, lineIndex) => {
+            const y = (lineIndex - (label.length - 1) / 2) * 20;
+            const text = svgEl("text", {
+                class: "node-text",
+                x: 0,
+                y,
+                "font-size": node.depth === 0 ? 17 : 14
+            });
+            text.textContent = line;
+            group.appendChild(text);
+        });
+
+        return group;
+    }
+
+    function startDrag(event) {
+        if (!lastMindmap) return;
+        const group = event.currentTarget;
+        const node = findGraphNode(group.dataset.id);
+        if (!node) return;
+
+        event.preventDefault();
+        selectNode(node.id);
+        group.setPointerCapture(event.pointerId);
+        const point = svgPoint(event);
+        dragState = {
+            id: node.id,
+            startPointerX: point.x,
+            startPointerY: point.y,
+            startNodeX: node.x,
+            startNodeY: node.y
+        };
+        group.classList.add("dragging");
+    }
+
+    function dragNode(event) {
+        if (!dragState || !lastMindmap) return;
+        const point = svgPoint(event);
+        const node = findGraphNode(dragState.id);
+        if (!node) return;
+
+        node.x = Math.round((dragState.startNodeX + point.x - dragState.startPointerX) * 100) / 100;
+        node.y = Math.round((dragState.startNodeY + point.y - dragState.startPointerY) * 100) / 100;
+        updateNodePosition(node);
+        updateConnectedEdges(node.id);
+        updateViewBox(lastMindmap.graph.nodes);
+        syncJsonPanel();
+    }
+
+    function stopDrag() {
+        if (!dragState) return;
+        const group = svg.querySelector(`.node[data-id="${cssEscape(dragState.id)}"]`);
+        if (group) group.classList.remove("dragging");
+        dragState = null;
+    }
+
+    function renameNode(event) {
+        event.preventDefault();
+        const node = findGraphNode(event.currentTarget.dataset.id);
+        if (!node) return;
+        selectNode(node.id);
+        selectedNodeName.focus();
+        selectedNodeName.select();
+    }
+
+    function selectNode(nodeId) {
+        selectedNodeId = nodeId;
+        const node = findGraphNode(nodeId);
+        selectedNodeName.disabled = !node;
+        applyNodeNameBtn.disabled = !node;
+        selectedNodeName.value = node?.label || "";
+        svg.querySelectorAll(".node.selected").forEach(item => item.classList.remove("selected"));
+        const group = svg.querySelector(`.node[data-id="${cssEscape(nodeId)}"]`);
+        if (group) group.classList.add("selected");
+    }
+
+    function clearNodeSelection() {
+        selectedNodeId = null;
+        selectedNodeName.value = "";
+        selectedNodeName.disabled = true;
+        applyNodeNameBtn.disabled = true;
+        svg.querySelectorAll(".node.selected").forEach(item => item.classList.remove("selected"));
+    }
+
+    function applySelectedNodeName() {
+        const node = findGraphNode(selectedNodeId);
+        const nextLabel = selectedNodeName.value.trim();
+        if (!node || !nextLabel) {
+            setStatus("请先选择节点并输入名称。", true);
+            return;
+        }
+        node.label = nextLabel;
+        updateSemanticNodeLabel(node.id, node.label);
+        renderMindmap(lastMindmap.graph);
+        syncJsonPanel();
+        setStatus("节点名称已更新。");
+    }
+
+    function updateNodePosition(node) {
+        const group = svg.querySelector(`.node[data-id="${cssEscape(node.id)}"]`);
+        if (group) group.setAttribute("transform", `translate(${node.x}, ${node.y})`);
+    }
+
+    function updateConnectedEdges(nodeId) {
+        const nodeById = new Map(lastMindmap.graph.nodes.map(node => [node.id, node]));
+        svg.querySelectorAll(`.edge[data-source="${cssEscape(nodeId)}"], .edge[data-target="${cssEscape(nodeId)}"]`).forEach(path => {
+            const source = nodeById.get(path.dataset.source);
+            const target = nodeById.get(path.dataset.target);
+            if (source && target) path.setAttribute("d", curvedPath(source.x, source.y, target.x, target.y));
+        });
+    }
+
+    function updateSemanticNodeLabel(graphNodeId, label) {
+        if (graphNodeId === "root") {
+            lastMindmap.title = label;
+            return;
+        }
+        const path = graphNodeId.replace(/^n-?/, "").split("-").filter(Boolean).map(Number);
+        let list = lastMindmap.nodes;
+        let semanticNode = null;
+        for (const index of path) {
+            semanticNode = list?.[index];
+            list = semanticNode?.children;
+        }
+        if (semanticNode) semanticNode.name = label;
+    }
+
+    function saveCurrentProject() {
+        if (!lastMindmap) {
+            setStatus("请先生成或打开一个思维导图。", true);
+            return;
+        }
+        const projects = loadProjects();
+        const now = new Date().toISOString();
+        const id = currentProjectId || crypto.randomUUID();
+        const name = projectName.value.trim() || lastMindmap.title || "未命名项目";
+        const project = {
+            id,
+            name,
+            text: inputText.value,
+            mindmap: lastMindmap,
+            generationSource: lastGenerationSource,
+            updatedAt: now,
+            createdAt: projects.find(item => item.id === id)?.createdAt || now
+        };
+        const nextProjects = [project, ...projects.filter(item => item.id !== id)].slice(0, 30);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(nextProjects));
+        currentProjectId = id;
+        projectName.value = name;
+        renderProjectList();
+        setStatus("项目已保存。");
+    }
+
+    function deleteCurrentProject() {
+        if (!currentProjectId) {
+            setStatus("当前没有选中的项目。", true);
+            return;
+        }
+        const projects = loadProjects().filter(item => item.id !== currentProjectId);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+        resetWorkspace();
+        renderProjectList();
+        setStatus("项目已删除。");
+    }
+
+    function resetWorkspace() {
+        currentProjectId = null;
+        lastMindmap = null;
+        lastGenerationSource = null;
+        clearNodeSelection();
+        projectName.value = "";
+        inputText.value = "";
+        svg.innerHTML = "";
+        jsonPanel.textContent = "";
+        emptyState.style.display = "grid";
+        setStatus("已新建空白项目。");
+    }
+
+    function openProject(id) {
+        const project = loadProjects().find(item => item.id === id);
+        if (!project) return;
+        currentProjectId = project.id;
+        projectName.value = project.name;
+        inputText.value = project.text || "";
+        lastMindmap = project.mindmap;
+        lastGenerationSource = project.generationSource || null;
+        renderMindmap(lastMindmap.graph);
+        syncJsonPanel();
+        setStatus(`已打开项目：${project.name}`);
+    }
+
+    function addHistoryEntry() {
+        const history = loadHistory();
+        const entry = {
+            id: crypto.randomUUID(),
+            name: projectName.value.trim() || lastMindmap.title || "未命名记录",
+            text: inputText.value,
+            mindmap: lastMindmap,
+            generationSource: lastGenerationSource,
+            createdAt: new Date().toISOString()
+        };
+        localStorage.setItem(HISTORY_KEY, JSON.stringify([entry, ...history].slice(0, 20)));
+        renderHistoryList();
+    }
+
+    function openHistory(id) {
+        const entry = loadHistory().find(item => item.id === id);
+        if (!entry) return;
+        currentProjectId = null;
+        projectName.value = entry.name;
+        inputText.value = entry.text || "";
+        lastMindmap = entry.mindmap;
+        lastGenerationSource = entry.generationSource || null;
+        renderMindmap(lastMindmap.graph);
+        syncJsonPanel();
+        setStatus(`已打开历史记录：${entry.name}`);
+    }
+
+    function renderProjectList() {
+        renderList(projectList, loadProjects(), openProject, "暂无项目");
+    }
+
+    function renderHistoryList() {
+        renderList(historyList, loadHistory(), openHistory, "暂无历史记录");
+    }
+
+    function renderList(container, items, onOpen, emptyText) {
+        container.innerHTML = "";
+        if (!items.length) {
+            const empty = document.createElement("div");
+            empty.className = "list-meta";
+            empty.textContent = emptyText;
+            container.appendChild(empty);
+            return;
+        }
+        items.forEach(item => {
+            const row = document.createElement("div");
+            row.className = "list-item";
+            row.addEventListener("click", () => onOpen(item.id));
+
+            const title = document.createElement("div");
+            title.className = "list-title";
+            title.textContent = item.name || "未命名";
+
+            const meta = document.createElement("div");
+            meta.className = "list-meta";
+            meta.textContent = formatTime(item.updatedAt || item.createdAt);
+
+            row.append(title, meta);
+            container.appendChild(row);
+        });
+    }
+
+    function loadProjects() {
+        return safeJson(localStorage.getItem(STORAGE_KEY), []);
+    }
+
+    function loadHistory() {
+        return safeJson(localStorage.getItem(HISTORY_KEY), []);
+    }
+
+    function syncJsonPanel() {
+        jsonPanel.textContent = lastMindmap ? JSON.stringify(lastMindmap, null, 2) : "";
+    }
+
+    function findGraphNode(id) {
+        return lastMindmap?.graph?.nodes?.find(node => node.id === id);
+    }
+
+    function updateViewBox(nodes) {
+        const pad = 180;
+        const bounds = nodes.reduce((acc, node) => ({
+            minX: Math.min(acc.minX, node.x),
+            maxX: Math.max(acc.maxX, node.x),
+            minY: Math.min(acc.minY, node.y),
+            maxY: Math.max(acc.maxY, node.y)
+        }), {minX: 0, maxX: 0, minY: 0, maxY: 0});
+        svg.setAttribute("viewBox", `${bounds.minX - pad} ${bounds.minY - pad} ${bounds.maxX - bounds.minX + pad * 2} ${bounds.maxY - bounds.minY + pad * 2}`);
+    }
+
+    function curvedPath(x1, y1, x2, y2) {
+        const midX = (x1 + x2) / 2;
+        const midY = (y1 + y2) / 2;
+        return `M ${x1} ${y1} Q ${midX} ${midY} ${x2} ${y2}`;
+    }
+
+    function svgPoint(event) {
+        const point = svg.createSVGPoint();
+        point.x = event.clientX;
+        point.y = event.clientY;
+        return point.matrixTransform(svg.getScreenCTM().inverse());
+    }
+
+    function wrapLabel(text, limit) {
+        const chars = Array.from(String(text || ""));
+        const lines = [];
+        for (let i = 0; i < chars.length; i += limit) {
+            lines.push(chars.slice(i, i + limit).join(""));
+        }
+        return lines.slice(0, 4);
+    }
+
+    function longestLine(lines) {
+        return Math.max(...lines.map(line => Array.from(line).length), 1);
+    }
+
+    function svgEl(name, attrs = {}) {
+        const el = document.createElementNS("http://www.w3.org/2000/svg", name);
+        Object.entries(attrs).forEach(([key, value]) => el.setAttribute(key, value));
+        return el;
+    }
+
+    function downloadSvg() {
+        if (!lastMindmap) {
+            setStatus("请先生成图。", true);
+            return;
+        }
+        download("mindmap.svg", new XMLSerializer().serializeToString(svg), "image/svg+xml");
+    }
+
+    function downloadJson() {
+        if (!lastMindmap) {
+            setStatus("请先生成图。", true);
+            return;
+        }
+        download("mindmap.json", JSON.stringify(lastMindmap, null, 2), "application/json");
+    }
+
+    function download(filename, content, type) {
+        const blob = new Blob([content], {type});
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        link.click();
+        URL.revokeObjectURL(url);
+    }
+
+    function setStatus(message, isError = false) {
+        statusEl.textContent = message;
+        statusEl.className = isError ? "status error" : "status";
+    }
+
+    function sourceLabel(source) {
+        const labels = {
+            ai_optimized: "AI 已优化",
+            ai_direct: "AI 直接生成",
+            algorithm_only: "本地算法生成"
+        };
+        return labels[source] || "生成完成";
+    }
+
+    function aiStatusText(data) {
+        if (!data.ai_status || data.generation_source !== "algorithm_only") return "";
+        return `（${data.ai_status}）`;
+    }
+
+    function safeJson(value, fallback) {
+        try {
+            return value ? JSON.parse(value) : fallback;
+        } catch {
+            return fallback;
+        }
+    }
+
+    function formatTime(value) {
+        if (!value) return "";
+        return new Date(value).toLocaleString("zh-CN", {
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit"
+        });
+    }
+
+    function cssEscape(value) {
+        return String(value).replace(/["\\]/g, "\\$&");
+    }
+</script>
+</body>
+</html>
